@@ -1,0 +1,95 @@
+---
+title: "Module 6 R Practice"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, include=FALSE}
+library(tidyverse)
+library(skimr)
+library(dplyr)
+library(corrplot)
+library(ggplot2)
+```
+
+# Data Cleaning and Setup
+mtcars from core R was selected as the data set to be analyzed.  It was loaded into the script and put in a format that was familiar for this analysis.  The dummy variable identified was the number of cylinders each vehicle had, therefore an additional column was added to the data for a character version of the cylinders columns.
+```{r Data Cleaning, echo=FALSE, message=FALSE, warning=FALSE}
+# Setting up data for easy manipulation
+# view(mtcars)
+data <- mtcars
+
+#creating a dummy variable (aka changing cyl to a factor)
+data <- data %>% mutate("Cyl.Dummy"=ifelse(cyl==4, "4", ifelse(cyl==6, "6", "8")))
+str(data)
+
+```
+
+
+# Regression 
+An initial look at the relationships between the continuous variables was warranted to understand if there were any strong positive or negative linear relationships.  **Figure 1** shows that analysis, where strong positives are represented by dark blue circles and strong negatives represented by dark red circles.  These were the relationships that were considered for this analysis.  Displacement vs weight shows a strong positive linear relationship, and therefore will be used for this report's analysis.
+```{r Initial regression look, echo=FALSE}
+data_num <- data %>% select(mpg, disp, hp, drat, wt, qsec)
+correlations <- cor(data_num)
+corrplot(correlations, method = "circle", main="Figure 1: Initial Regression Analysis")
+```
+
+## Correlation
+After plotting the data (see **Fig. 2**), it is clear there is a positive linear relationship with some groupings in the data.  The significance was tested to ensure the analysis could continue at confidence of 0.95.  The correlation coefficient was calculated at 0.888 with a p-value < 0.05.  This means there is enough evidence to support that the correlation for displacement by weight is not equal to 0. 
+```{r Correlation Testing, echo=FALSE}
+ggplot(data=data, mapping = aes(x=wt, y=disp))+
+  geom_point()+
+  theme_classic()+
+  labs(title = "Figure 2: Displacement by Weight", x="Weight (1000lbs)", y="Displacement (cu.in)")
+cor.test(data$wt, data$disp, conf.level = 0.95)
+```
+
+## Dummy Variable Analysis
+Because there are visible buckets, the data was analyzed to optimize the regression equations.  The first look was using a dummy variable in which the regression was normalized by cylinder and offsets were calculated to shift the regression curve to the appropriate y intercept.  The calculated regression lines were plotted and shown on **Figure 3**.  Distinct groupings become more apparent once the legend was applied to the graph.
+```{r Dummy variables, echo=FALSE}
+#cyl turned to a factor to be used in the legend
+cylVec <- data$Cyl.Dummy
+cylVec <- factor(cylVec)
+# levels(cylVec)
+#Calculating the regression
+regression <- lm(disp~wt+Cyl.Dummy, data=data)
+regression
+plot(y=data$disp, 
+     x=data$wt, 
+     col=data$Cyl.Dummy, 
+     main="Figure 3: Displacement by Weight: A Dummy's Tale", 
+     sub = "Dummy Variable Analysis", 
+     xlab = "Weight (1000lbs)", 
+     ylab = "Displacement (cu.in)")
+legend("topleft", 
+       title="Cylinders",
+       legend = levels(cylVec),
+       text.col = c(1:3))
+abline(a=regression$coefficients[1], b=regression$coefficients[2], col=1)
+abline(a=regression$coefficients[1]+regression$coefficients[3], b=regression$coefficients[2], col=2)
+abline(a=regression$coefficients[1]+regression$coefficients[4], b=regression$coefficients[2], col=3)
+```
+
+## Subset Analysis
+An alternative method to looking at data subgroups is to subset the subgroups and calculate each group's regression individually.  This shows offsets in the data as well as the change in slope by subgroup.  **Figure 4** shows the subset analysis for the displacement by weight relationship.  8 Cylinder vehicles have a higher slope than the other two as shown in the figure with the steeper line.  This could show that 8 cylinder vehicles pull the data's total regression in a direction more so than the other two cylinders.
+```{r Subset Analysis, echo=FALSE, message=FALSE}
+ggplot(data, mapping=aes(wt, disp, col=Cyl.Dummy))+
+  geom_point()+
+  geom_smooth(method=lm, se=FALSE)+
+  theme_classic()+
+  labs(title = "Displacement by Weight: A subset story", 
+       x="Weight (1000lbs)", 
+       y="Displacement (cu.in)", 
+       subtitle = "Subset Analysis")
+```
+
+
+# Conclusion
+Dummy variables help to look at how each subgroup offsets the y intercept.  It was a quick way to show the data is effected by subgroups, specifically the Cylinders within a vehicle.  Further analysis could be completed because there were clear subgroups.  The subset analysis shows how individual regressions between displacement and weight look by subgroups.  By using the subset method, it can offer a three dimensional analysis of the relationship between two variables by subgroups.  It gives more insights into how the variables under analysis relate to each other by their individual groups. In this analysis, there is a higher slope and intercept for 8 cylinder vehicles.  This may pull the regression slightly in favor of that subgroup, which is a good to know because the regression calculation is sensitive to data being pulled in one direction or another.
+
+

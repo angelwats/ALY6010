@@ -1,0 +1,232 @@
+---
+title: "Module 3 R Practice"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load and clean up the files
+
+The packages needed for this analysis:
+```{r R Packages, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(Hmisc)
+library(skimr)
+library(psych)
+library(pastecs)
+library(doBy)
+library(ggpubr)
+```
+
+
+First step is to collect the data and clean up the data.  We are assuming this data is the population of a particular group.
+```{r Opening and cleaning csv}
+#Reading in the table for this script to analyze
+lung <- read_csv("LungCapDataCSV.csv")
+lung <- mutate(lung, Smoke = as.logical(ifelse(Smoke=="no", FALSE, TRUE)),
+               Caesarean = as.logical(ifelse(Caesarean=="no", FALSE, TRUE)),
+               Gender = ifelse(Gender=="male", "Male", "Female"))
+names(lung)
+str(lung)
+view(lung)
+```
+
+
+
+## Creating a sample set
+
+Creating a random sample from the dataset to have 100 samples of the population.  The seed was set to an integer that would be kept constant during the analysis, and therefore only randomize the sample once for consistent analysis between sessions.
+```{r Create a sample set}
+set.seed(23)
+sample1 <- sample(nrow(lung), 100)
+sample1_set <- lung[sample1,]
+view(sample1_set)
+```
+
+The sample n is over 30, however visualizing the spread to ensure the sample is still relatively normal.
+```{r sample visualization}
+#viewing the spread of the continuous variables
+sample1_height <- ggplot(sample1_set)+
+  geom_histogram(mapping=aes(Height), fill="dark red", color="black")+
+  theme_classic()+
+  labs(title="Spread of Sample Heights", y="Count", x="Height (cm)")
+sample1_height
+sample1_age <- ggplot(sample1_set)+
+  geom_histogram(mapping=aes(Age), fill="dark green", color="black", binwidth = 1)+
+  theme_classic()+
+  labs(title="Spread of Sample Age", y="Count", x="Age (years)")
+sample1_age
+sample1_lc <- ggplot(sample1_set)+
+  geom_histogram(mapping=aes(LungCap), fill="dark blue", color="black")+
+  theme_classic()+
+  labs(title="Spread of Sample Lung Capacity", y="Count", x="Lung Capacity")
+sample1_lc
+
+#viewing categorical variables
+sample1_caes <- ggplot(sample1_set)+
+  geom_bar(mapping=aes(Caesarean), fill="blue")+
+  theme_classic()+
+  labs(title="Spread of Sample Caesarean Cases", y="Count")
+sample1_caes
+sample1_gender <- ggplot(sample1_set)+
+  geom_bar(mapping=aes(Gender), fill="red")+
+  theme_classic()+
+  labs(title="Spread of Sample Gender", y="Count")
+sample1_gender
+sample1_smoke <- ggplot(sample1_set)+
+  geom_bar(mapping=aes(Smoke), fill="green")+
+  theme_classic()+
+  labs(title="Spread of Sample Smoke Cases", y="Count")
+sample1_smoke
+```
+
+Making a function to capture generic sample statistics specific for t test calculations.
+```{r t test Sample Statistics Function}
+sumstats_ttest <- function(x){
+  xbar <- mean(x)
+  sd <- sd(x)
+  n <- length(x)
+  df <- n-1
+  return(c(xbar=xbar, std.dev=sd, n=n, df=df))
+}
+```
+
+Using the function on the sample set.
+```{r Function test}
+LC_sampstats <- sumstats_ttest(sample1_set$LungCap)
+LC_sampstats
+```
+
+
+
+## t Test
+
+A t Test will be used to evaluate the claim that the population has a mean lung capacity of 7.86 (calculated below).
+```{r Population mean}
+mu <- mean(lung$LungCap)
+mu
+```
+
+For this analysis it will be tested using a 95% confidence level.
+```{r Confidence}
+alpha <- 0.05
+```
+
+Step 1: State the Null and Alternative Hypothesis and state the claim.
+```{r Hypotheses and claim}
+null <- "Population mean is equal to 7.86"
+alt <- "Population mean is not equal to 7.86"
+claim <- "The mean lung capacity is 7.86"
+```
+
+Step 2: Compute the sample critical value.
+Note: this is a two sided test because the alternative is a do not equal.
+```{r Critical value}
+CV <- qt(p=alpha, df=LC_sampstats[4], lower.tail=TRUE)
+CV
+CV2 <- qt(p=alpha, df=LC_sampstats[4], lower.tail=FALSE)
+CV2
+```
+
+Step 3: Compute the test value.
+```{r t.test()}
+samplet.test <- t.test(sample1_set$LungCap, mu=mean(lung$LungCap), alternative = "two.sided")
+samplet.test
+```
+
+Step 4: Make a decision around the hypothesis.
+```{r Decision}
+conclusion <- if(CV2>abs(samplet.test$statistic)){
+  ("Do not reject the null hypothesis")
+  }  else {"Reject Null hypothesis"
+}
+conclusion
+```
+
+Step 5: Summarize the results.
+```{r Conclusion}
+summary <- if(conclusion=="Reject Null hypothesis"){
+  "There is not enough evidence to support the claim"
+} else {
+  "There is sufficient evidence to support the claim"
+}
+summary
+claim
+```
+
+The sample set did not have the data to conclude the population mean. The claim was that with 95% confidence, the population lung capacity average is 7.86.
+
+
+
+## Proportion test
+The same sample was used for this evaluation.
+
+The claim is that the number of patients born Caesarean is greater than 22.6%.  Using a 95% confidence level, the proportion for sample set was calculated for patients born via caesarean.
+```{r proportion calculations}
+#population proportion
+csec <- lung %>% filter(Caesarean==TRUE) %>% nrow()
+total <- nrow(lung)
+p <- csec/total
+pt
+q <- 1-p
+
+#sample proportion
+csec_samp <- sample1_set%>% filter(Caesarean==TRUE) %>% nrow()
+n <- nrow(sample1_set)
+phat <- csec_samp/n
+```
+
+Quick check to see if np and nq are greater than 5 to continue.
+```{r}
+np <- total*p
+np
+nq <- total*q
+nq
+```
+
+
+Step 1: State the Null and Alternative Hypothesis and state the claim.
+```{r proportion claims}
+null <- "Population proportion is equal to 22.6%"
+alt <- "Population proportion is greater than 22.6%"
+claim <- "The proportion of people born caesarean is greater than 22.6%"
+
+```
+
+Step 2: Compute the sample critical value.
+```{r proportion critical value}
+CV <- qnorm(p, lower.tail = FALSE)
+CV
+```
+
+Step 3: Compute the test value.
+```{r z value}
+z <- (phat - p)/ sqrt((p*q)/n)
+```
+
+Step 4: Make a decision around the hypothesis.
+```{r Make decision for proportion}
+conclusion <- if(CV>z){
+  ("Do not reject the null hypothesis")
+}  else {"Reject Null hypothesis"
+}
+conclusion
+```
+
+Step 5: Summarize the results.
+```{r}
+summary <- if(conclusion=="Do not reject the null hypothesis"){
+  "There is not enough evidence to support the claim"
+} else {
+  "There is sufficient evidence to support the claim"
+}
+summary
+claim
+```
+
+There is not enough evidence to support the null hypothesis.  The claim that the population proportion of patients born via caesareans is greater than 22.6% still stands and is supported by the sample data set.

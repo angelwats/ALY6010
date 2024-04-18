@@ -1,0 +1,208 @@
+---
+title: "Module 2 R Practice"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Descriptive Statistics
+
+Descriptive statistics were calculated using various R functions, and then plotted to visually understand the relationships between the data.
+
+Loading the necessary R packages for functions used throughout this report.
+```{r R Packages}
+library(tidyverse)
+library(ggplot2)
+library(Hmisc)
+library(skimr)
+```
+
+To understand the Lung Capacity data, first it needs to be loaded into the R document.  Understanding what is in the data table can help understand what type of analyses need to be performed on it.
+```{r Initial CSV Setup}
+lung <- read_csv("LungCapDataCSV.csv")
+
+#Visualizing the columns headers and data types.  (NOTE: changing yes/no columns to type=Logical, and capitalizing values)
+lung <- mutate(lung, Smoke = as.logical(ifelse(Smoke=="no", FALSE, TRUE)),
+                   Caesarean = as.logical(ifelse(Caesarean=="no", FALSE, TRUE)),
+                   Gender = ifelse(Gender=="male", "Male", "Female"))
+names(lung)
+str(lung)
+```
+
+
+## Numerical Data: Summary
+
+Looking at all the data as a whole can help show what the population may be doing without confounding variables (we will look at the categorical data and how it interacts with the numerical data later).  These function list all summary statistics (numerical and categorical) into table formats.
+```{r Summary Data}
+summary(lung)
+skim(lung)
+describe(lung)
+```
+
+To make tables of the population parameters (mu, sigma, min, max, and median), R was used to calculate specific statistics and combine all into a data frame.
+```{r}
+#Creating variables for the summary statistics.
+mu_lc <- mean(lung$LungCap)
+sigma_lc <- sd(lung$LungCap)
+max_lc <- max(lung$LungCap)
+min_lc <- min(lung$LungCap)
+med_lc <- median(lung$LungCap)
+
+mu_a <- mean(lung$Age)
+sigma_a <- sd(lung$Age)
+max_a <- max(lung$Age)
+min_a <- min(lung$Age)
+med_a <- median(lung$Age)
+
+mu_h <- mean(lung$Height)
+sigma_h <- sd(lung$Height)
+max_h <- max(lung$Height)
+min_h <- min(lung$Height)
+med_h <- median(lung$Height)
+
+#Turning the variables into vectors that will populate the data frame.
+Column <- c("LungCap", "Age", "Height")
+mu <- c(mu_lc, mu_a, mu_h)
+sigma <- c(sigma_lc, sigma_a, sigma_h)
+Maximum <- c(max_lc, max_a, max_h)
+Minimum <- c(min_lc, min_a, min_h)
+Median <- c(med_lc, med_a, med_h)
+
+DescStat_Num <- data.frame(Column,mu, sigma, Maximum, Minimum, Median)
+view(DescStat_Num)
+```
+
+Data appears to be normally distributed because the means and medians do not vary greatly for all the numerical values.  Visualizing the data later will help verify this claim.
+
+
+## Categorical Data: Summary
+
+Understanding the quantity of values in each bucket for categorical data can help understand what the frequency of each attribute is in the population.  Frequency tables were made to understand the quantity of data within each bucket for the factors, character, and logical data.
+```{r Descriptive Stats - Categorical}
+table(lung$Smoke)
+table(lung$Gender)
+table(lung$Caesarean)
+
+DescStat_Gender <- data.frame(Gender=table(lung$Gender))
+DescStat_Smoke <- data.frame(Smokers=table(lung$Smoke))
+DescStat_Caesarean <- data.frame(Caesarean=table(lung$Caesarean))
+```
+Each categorical column had two possible outcomes.  The gender had an even split for the two outcomes: male or female.  Smokers and caesarean were not even, there was significantly smaller population if the result was TRUE.
+
+## Three line tables
+Three line tables help visualize categorical data by using multiple categories and counting the n in each category for specific groups.
+
+
+# Data Visualization
+
+To see the spread of the numerical data, histograms were plotted in R.
+```{r Numerical Histograms}
+hist_lc <- ggplot(lung)+
+  geom_histogram(mapping=aes(LungCap), fill="Navy", color="Black")+
+  theme_classic()+
+  labs(title= "Histogram of Lung Capacity", x= "Lung Capacity", y="Count")
+hist_lc
+#Binwidth adjusted to 1 to have the appropriate bar width for the level of significant figures the data provided.
+hist_a <- ggplot(lung)+
+  geom_histogram(mapping=aes(Age), fill="Maroon", color="Black", binwidth = 1)+
+  theme_classic()+
+  labs(title= "Histogram of Age", x= "Age (years)", y="Count")
+hist_a
+hist_h <- ggplot(lung)+
+  geom_histogram(mapping=aes(Height), fill="Dark green", color="Black")+
+  theme_classic()+
+  labs(title= "Histogram of Age", x= "Height (cm)", y="Count")
+hist_h
+```
+As stated above, the data appears to be normally distributed with the exception of age, where there is a slight negative skew.
+
+Plotting the frequencies for the categorical data. geom_bar was used because the heights of the bars represent the number of values.
+```{r Categorical Frequencies}
+bar_gen <- ggplot(lung)+
+  geom_bar(mapping=aes(Gender, fill=Gender))+
+  theme_classic()+
+  labs(title = "Gender Frequencies", y="Frequency")
+bar_gen
+bar_smo <- ggplot(lung)+
+  geom_bar(mapping=aes(Smoke), fill="dark red")+
+  theme_classic()+
+  labs(title = "Smoker Frequencies", y="Frequency", x="Smoke?")
+bar_smo
+bar_cae <- ggplot(lung)+
+  geom_bar(mapping=aes(Caesarean), fill="orange")+
+  theme_classic()+
+  labs(title = "Caesarean Frequencies", y="Frequency")
+bar_cae
+```
+The visualizations show the same conclusions from the descriptive stats.
+
+
+## Relationships
+
+Now understand the relationships between the categorical and numerical data.
+
+To look at the relationship between age and lung capacity by Caesarean status, plotted against a y=x reference line.
+```{r Age vs Lung Capacity by Cae}
+scatter_avlc <- ggplot(lung, mapping=aes(Age, LungCap))+
+  geom_point(mapping=aes(color=Caesarean))+
+  geom_abline()+
+  geom_smooth(method=lm, formula=y~x)+
+  xlim(0,20)+
+  ylim(0,20)+
+  theme_classic()+
+  labs(title= "Relationship between Age and Lung Capacity", y= "Lung Capacity",
+       x= "Age (years)")
+scatter_avlc
+r_avlc <- cor(lung$Age, lung$LungCap)
+r_avlc
+r2_avlc <- r_avlc^2
+r2_avlc
+```
+Because the units are not 1 for 1, the reference line may not be indicative of a 1 for 1 relationship.  However there is a linear relationship between age and lung capacity as shown with the regression line in blue.  The correlation between them is week when looking at the correlation coefficients (R=0.82, R^2=0.67).
+
+Looking at gender vs height through boxplots to visualize the data and identify any outliers by gender.
+```{r Gender by Height BP}
+boxplot_gvsh <- ggplot(lung)+
+  geom_boxplot(mapping=aes(y=Gender, x=Height, color=Gender))+
+  geom_boxplot(mapping=aes(x=Height))+
+  theme_classic()+
+  labs(title="Height vs Gender", x="Height (cm)")
+boxplot_gvsh
+```
+
+The overall data is shown in the black boxplot.  There appears to be no outlier points shown in the boxplots for either gender. Females appear to have a slightly smaller median than males.
+
+To understand what the lung capacity looks like for smokers vs non-smokers.
+```{r Smokers Data}
+violin_lcvS <- ggplot(lung)+
+  geom_violin(mapping=aes(x=LungCap, y=Smoke))+
+  theme_bw()+
+  labs(title= "Smokers vs Lung Capacity", x="Lung Capacity", y="Did they smoke?")
+violin_lcvS
+```
+The smokers appear to have data on the higher end of the lung capacity scale whereas non-smokers span the range.  The data is slightly confounded by age and the sample size is smaller for the smokers.
+
+To visualize two discrete variables, jitter was used to create clouds of points for each category and subcategory.
+```{r Jitter of two discrete}
+jitter_cvsg <- ggplot(lung)+
+  geom_jitter(mapping=aes(Caesarean, Gender))+
+  theme_bw()+
+  labs(title= "Caesarean by Gender", x="Born via Caesarean", y="Gender")
+jitter_cvsg
+```
+Majority of the data, despite gender, were not born via a Caesarean.  The genders do show a similar trend and have approximately even spread within each category.
+
+To show the spread of the lung capacity data by gender, a density plot was made using ggplot.
+```{r Continuous by discrete}
+density_lcvg <- ggplot(lung)+
+  geom_density(mapping=aes(LungCap, color=Gender))+
+  theme_classic()+
+  labs(title="Density of Lung Capacity by Gender", y="Density", x="Lung Capacity")
+density_lcvg
+```
+Peaks are located in a similar area however more females are found at their respective most dense area of the data.  The males density chart shows a slight positive offset in the data, meaning there were more males at the higher end than females for this data set.
+

@@ -1,0 +1,167 @@
+---
+title: "Module 5 R Practice"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Prework, include=FALSE}
+#Loading libraries
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+library(Hmisc)
+library(psych)
+library(skimr)
+
+#pre work for this analysis
+rm(list=ls())
+dev.off()
+```
+
+# Initial Analysis
+The data used for this report was the Iris dataset provided by the base R library.
+```{r Load the dataset, include=FALSE}
+#loading the dataset and understanding the metadata
+data <- datasets::iris
+```
+
+## Exploratory Data Analysis
+To understand the variables, some exploratory data analysis was conducted.  This directed what questions should be asked because the dataset was not collected by the author of this report.
+```{r Summary Data, echo=FALSE}
+summary(data)
+headtail(data)
+```
+
+Because numerical data is being analyzed, histograms of each variable were plotted to verify the shape of the curves (data will need to be relatively normal to complete this analysis).
+```{r Histograms, echo=FALSE}
+hist_sl <- ggplot(data)+
+  geom_histogram(mapping=aes(Sepal.Length), binwidth = 0.25, fill="dark green", color="black")+
+  theme_classic()+
+  labs(x="Sepal Length", y="Count", title = "Histogram of Sepal Length")
+hist_sl
+hist_sw <- ggplot(data)+
+  geom_histogram(mapping=aes(Sepal.Width), binwidth = 0.15, fill="dark blue", color="black")+
+  theme_classic()+
+  labs(x="Sepal Width", y="Count", title = "Histogram of Sepal Width")
+hist_sw
+hist_pl <- ggplot(data)+
+  geom_histogram(mapping=aes(Petal.Length), binwidth = 0.5, fill="dark red", color="black")+
+  theme_classic()+
+  labs(x="Petal Length", y="Count", title = "Histogram of Petal Length")
+hist_pl
+hist_pw <- ggplot(data)+
+  geom_histogram(mapping=aes(Petal.Width), binwidth = 0.25, fill="purple", color="black")+
+  theme_classic()+
+  labs(x="Petal Width", y="Count", title = "Histogram of Petal Width")
+hist_pw
+```
+
+
+# Correlation
+For this analysis, the start would be to look at the paired sets of each measured portions of the plant (Sepal or Petal).
+
+## Does the length and width of the sepal have a strong correlation?
+```{r Sepal Visualization, echo=FALSE}
+ggplot(data)+
+  geom_point(mapping=aes(x=Sepal.Length, y=Sepal.Width, color=Species))
+```
+
+Correlation coefficient was calculated using R functions.  The relationship between Sepal width and Sepal length have a weak negative relationship according to its r value.
+```{r Sepal Cor, echo=FALSE}
+x <- data$Sepal.Length
+y <- data$Sepal.Width
+cor_table_sep <- data.frame(x, y, data$Species)
+cor_table_sep <- cor_table_sep %>% mutate(xy=x*y, x2=x^2, y2=y^2)
+cor(x,y) #weak negative relationship but there seems to be species specific relationships
+```
+
+## Does the length and width of the petal have a strong correlation?  
+An alternative relationship, Petal dimensions, was also analyzed.  First the data was plotted.
+```{r Petal Visualization, echo=FALSE}
+ggplot()+
+  geom_point(data, mapping=aes(x=Petal.Length, y=Petal.Width, color=Species))
+```
+
+Correlation coefficient was calculated using R functions.  Upon initial analysis, the data for petal dimensions looked promising for a strong positive linear relationship and was further explored.
+```{r Petal Cor, echo=FALSE}
+x <- data$Petal.Length
+y <- data$Petal.Width
+cor_table <- data.frame(x, y, data$Species)
+cor_table %>% mutate(xy=x*y, x2=x^2, y2=y^2)
+cor_table
+cor(x,y)
+```
+
+All numerical relationships were explored and combined into a data table.  Under 5 variables were explored for the purpose of analysis and data presentation.  More than 5 variables become visually flawed and create complexities that mask the messages trying to be identified
+```{r All Correlations, echo=FALSE}
+data_num <- data %>% select(Sepal.Length, Sepal.Width, Petal.Length, Petal.Width)
+correlations <- cor(data_num)
+correlations
+```
+
+Those correlations were plotted on a correlation plot to show a visual of the strong and weak relationships.
+```{r Correlation Plots, echo=FALSE}
+corrplot(correlations, method="shade")
+```
+
+
+# Regression
+The petal dimensions were further explored due to the high r value calculated through the correlation analysis.  The significance of the relationship needed to be analyzed.  This was tested at an significance of 0.05.
+```{r}
+alpha <- 0.05
+null <- "rho = 0"
+alt <- "rho neq 0"
+#determine significance
+cor.test(x=x, y=y, 
+         alternative="two.sided",
+         method="pearson", 
+         conf.level =0.95)
+```
+
+The analysis resulted in the relationship being significant and reject the null hypothesis.
+
+## Linear Equation
+The linear equation coefficients was calculated and plotted against the data.
+```{r Linear equation, echo=FALSE}
+reg_equation <- lm(data = data, Petal.Width~Petal.Length)
+reg_equation
+reg_plot <- ggplot(data, mapping=aes(x=Petal.Length, y=Petal.Width))+
+  geom_point(mapping=aes(color=Species))+
+  geom_smooth(method=lm)+
+  theme_classic()+
+  labs(x="Petal Length", y="Petal Width", title = "Scatter Plot")
+reg_plot
+```
+
+Values were identified and selected to predict the width of the petal given a specific length. These were combined into a data table.
+```{r Predictions, echo=FALSE}
+petLength_future <- data.frame("Petal.Length"=c(1,3,4,5))
+petWidth_pred <- predict(newdata=petLength_future, reg_equation)
+reg_prediction_df <- data.frame(petLength_future, "Petal.Width"=petWidth_pred)
+reg_prediction_df
+```
+
+The final points were overlayed to show where the points would be calculated given the existing data.
+```{r Regression Plot, echo=FALSE}
+regression_finalplot <- ggplot()+
+  geom_point(data, mapping=aes(x=Petal.Length, y=Petal.Width, color=Species))+
+  geom_smooth(data, mapping=aes(x=Petal.Length, y=Petal.Width), method=lm)+
+  geom_point(reg_prediction_df, mapping=aes(x=Petal.Length, y=Petal.Width), color="black")+
+  theme_classic()+
+  labs(x="Petal Length", y="Petal Width", title = "Scatter Plot")
+regression_finalplot
+```
+
+
+# Conclusion
+The regression analysis is a useful tool when it comes to predicting data that doesn't exist or is partially collected.  Both correlations and regression analyses utilize existing relationships in the data, however, the regression needs the data to be strongly related in order to predict with some degree of accuracy what the data may look like in the future.  Correlation just statistically describes the relationship of two variables in a dataset.
+
+
+
+

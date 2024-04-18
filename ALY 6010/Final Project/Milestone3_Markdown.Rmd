@@ -1,0 +1,506 @@
+---
+title: "Final Project"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, message=FALSE, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(ggQC)
+library(nhstplot)
+library(dplyr)
+library(corrplot)
+library(Hmisc)
+library(psych)
+library(skimr)
+library(nhstplot)
+library(hexbin)
+library(car)
+```
+
+\newpage
+# Introduction
+A subset of the SWAN data set was analyzed over the past six weeks to learn of any statistically significant relationships between the variables within the data set.  This data represents women in their middle years and will be utilized in an attempt to better address the health needs of women during those important years (43-52 years is being represented in this data).
+
+## Research Questions
+The research questions below were formulated from the initial **Exploratory Data Analysis**.  These questions were assessed using hypothesis testing to understand if similarities or difference are statistically relevant.  If they are, conclusions were made on both a practical and statistical level.  The SWAN data set was treated as a population for the majority of the analyses unless otherwise stated.
+1. Do women with anemia have a different pulse than those without an anemia diagnosis?
+2. Do the proportion of women who smoke at age 45 the same as the proportion of all women who smoke in the SWAN data set?
+3. Is there a positive linear relationship between Height and Weight?
+4. Can Diastolic Blood Pressure be used to predict Systolic Blood Pressure?
+5. Is there a significant linear relationship between weight and blood pressure?
+
+
+
+
+# Exploratory Data Analysis
+## Data Loading and Clean Up
+A subset had been created by Professor Dan Koloski to have some selected variables of importance.  This was further subsetted into a smaller data set that was cleaned up and analyzed to answer the specific questions outlined above (see **Research Questions**). 
+
+The cleaned up data was loaded into R and subsetted for relevent variables.  These variables were updated to represent logical or adjust the case for character and categorical variables.  
+```{r Data Loading, echo=FALSE, message=FALSE, warning=FALSE}
+setwd("C:/Users/12072/OneDrive/Desktop/ALY 6010/Final Project")
+#Data loading
+rawData <- 
+  read_csv("SWANBaselineData_ProfessorKSubset (1).csv")
+# str(rawData)
+# headTail(rawData)
+
+#Data used for most analyses
+milestone2_subset <- subset(rawData, select = c(
+  SWANID,
+  AGE0,
+  ANEMIA0,
+  LISTEN0,
+  TAKETOM0,
+  CONFIDE0,
+  SYSBP10,
+  DIABP10,
+  HELPSIC0,
+  SMOKERE0,
+  PULSE0,
+  HEIGHT0,
+  WEIGHT0,
+  RACE)
+)
+
+milestone2_subset <- mutate(milestone2_subset, ANEMIA0=ifelse(ANEMIA0=="(1) No",
+                                                              "No", ifelse(ANEMIA0=="(2) Yes", "Yes", NA)),
+                          SMOKERE0=ifelse(SMOKERE0=="(1) No", "No", ifelse(SMOKERE0=="(2) Yes", "Yes", NA)),
+                            RACE=ifelse(RACE=="(1) Black/African American", "Black/African American",
+                                        ifelse(RACE=="(2) Chinese/Chinese American", 
+                                               "Chinese/Chinese American",
+                                               ifelse(RACE=="(3) Japanese/Japanese American",
+                                                      "Japanese/Japanese American",
+                                                      ifelse(RACE=="(4) Caucasian/White Non-Hispanic", 
+                                                             "Caucasian/ White Non-Hispanic", 
+                                                             ifelse(RACE=="(5) Hispanic", "Hispanic", NA)
+                                                      )))))
+milestone2_subset <- mutate(milestone2_subset, LISTEN0=as.numeric(substr(LISTEN0, 2,2)), TAKETOM0=as.numeric(substr(TAKETOM0,2,2)),
+       CONFIDE0=as.numeric(substr(CONFIDE0,2,2)), HELPSIC0=as.numeric(substr(HELPSIC0,2,2)))
+#a minority will be any group that has a frequency less than 0.2 (5 races, means each should have a fifth of the population if there was even)
+#SupportScore is to assess whether the patient feels supported. It combines the numeric value for each of the questions:
+##Have someone who listens? Have someone to take to the doctor? Have someone to confide in? Have someone to do chores when sick?
+milestone2_subset <- mutate(milestone2_subset, Subdivision=ifelse(RACE=="Black/African American"|RACE=="Caucasian/ White Non-Hispanic", "Majority", "Minority"),
+               SupportScore=LISTEN0+TAKETOM0+CONFIDE0+HELPSIC0, SupportAvg=SupportScore/4)
+
+
+# view(milestone2_subset)
+# str(milestone2_subset)
+
+```
+
+## Additional Variables
+Racial subdivisions were determined by understanding the frequency of the races identified.  If a group was identified to have a frequency __>__ 0.200 then it was considered a majority group, the rest were considered minorities (actual frequencies outlined in **Table 1** and a Pareto plot in **Fig. 1** in **Appendix**).  This was determined because there are 5 races identified, so even distribution would be 20% of the data.  Support score was calculated by combining the scores of the following questions, each on a scale of 1 to 5:
+* Have someone who listens? 
+* Have someone to take to the doctor? 
+* Have someone to confide in? 
+* Have someone to do chores when sick?
+```{r Additional Variables, echo=FALSE, message=FALSE}
+##creating frequency and pareto charts to plot the race data
+##Creates a tibble with the total counts for each race identified
+race <- milestone2_subset %>% group_by(RACE) %>% summarise(Total=n())
+##Calculates the frequency of each race
+race <- mutate(race, Frequency=Total/sum(Total))
+# race
+race_pareto <- ggplot(race, mapping=aes(x=RACE, y=Total))+
+  stat_pareto(bars.fill="gray")+
+  labs(title=" Figure 1: Patient Race Pareto", x="Race")+
+  theme_classic()+
+  theme(axis.text.x=element_text(size=10, angle=75, hjust=1, vjust=1))
+# race_pareto
+
+milestone2_subset <- mutate(milestone2_subset, Subdivision=ifelse(RACE=="Black/African American"|RACE=="Caucasian/ White Non-Hispanic", "Majority", "Minority"),
+                            SupportScore=LISTEN0+TAKETOM0+CONFIDE0+HELPSIC0, SupportAvg=SupportScore/4)
+# headTail(milestone2_subset)
+
+```
+
+## Summary Statistics
+Numerical data summary statistics were calculated and combined into a data table (see **Table 2** in **Appendix**).
+```{r Numerical Summary Statistics, echo=FALSE}
+age_sd <- sd(milestone2_subset$AGE0, na.rm = TRUE)
+age_mean <- mean(milestone2_subset$AGE0, na.rm = TRUE)
+pulse_sd <- sd(milestone2_subset$PULSE0, na.rm = TRUE)
+pulse_mean <- mean(milestone2_subset$PULSE0, na.rm = TRUE)
+height_sd <- sd(milestone2_subset$HEIGHT0, na.rm = TRUE)
+height_mean <- mean(milestone2_subset$HEIGHT0, na.rm=TRUE)
+weight_sd <- sd(milestone2_subset$WEIGHT0, na.rm = TRUE)
+weight_mean <- mean(milestone2_subset$WEIGHT0, na.rm=TRUE)
+age_med <- median(milestone2_subset$AGE0, na.rm=TRUE)
+pulse_med <- median(milestone2_subset$PULSE0, na.rm=TRUE)
+height_med <- median(milestone2_subset$HEIGHT0, na.rm=TRUE)
+weight_med <- median(milestone2_subset$WEIGHT0, na.rm=TRUE)
+
+rows <- c("Age", "Pulse", "Height", "Weight")
+means <- c(age_mean, pulse_mean, height_mean, weight_mean)
+sds <- c(age_sd, pulse_sd, height_sd, weight_sd)
+medians <- c(age_med, pulse_med, height_med, weight_med)
+
+sumStats <- data.frame(Variable=rows, Mean=means, Standard.Deviation=sds, Median=medians)
+# sumStats
+# summary(milestone2_subset)
+```
+
+## Data Visualizations
+Continuous variables were plotted on histograms (see **Fig. 2-6** in **Appendix**).  This is to show how the data is distributed for this analysis and aided in how the **Research Questions** would be asked.  Pulse and Height were normally distributed; Age and Weight were positively skewed where the skew is more defined for Weight and closer to normal for Age.  Support score was also presented as histogram, where it was negatively skewed.
+```{r Continuous Histograms, echo=FALSE, message=FALSE, warning=FALSE}
+age_hist <- ggplot(milestone2_subset)+
+  geom_histogram(mapping=aes(AGE0), na.rm = TRUE, binwidth = 1, color="black")+
+  theme_classic()+
+  labs(title="Figure 2: Spread of Age", x="Age (years)", y="Count")
+# age_hist
+##put a box plot in to highlight the outliers in this chart
+pulse_hist <- ggplot(milestone2_subset,mapping=aes(PULSE0), na.rm = TRUE)+
+  geom_histogram(color="black")+
+  geom_boxplot()+
+  theme_classic()+
+  labs(title="Figure 3: Spread of Pulse", x="Pulse (beats/30 sec)", y="Count")
+# pulse_hist
+height_hist <- ggplot(milestone2_subset)+
+  geom_histogram(mapping=aes(HEIGHT0), na.rm = TRUE, color="black")+
+  theme_classic()+
+  labs(title="Figure 4: Spread of Height", x="Height (cm)", y="Count")
+# height_hist
+weight_hist <- ggplot(milestone2_subset)+
+  geom_histogram(mapping=aes(WEIGHT0), na.rm = TRUE, color="black")+
+  theme_classic()+
+  labs(title="Figure 5: Spread of Weight", x="Weight (kg)", y="Count")
+# weight_hist
+
+support_hist <- ggplot(milestone2_subset)+
+  geom_histogram(mapping=aes(SupportScore), na.rm=TRUE, color="black", binwidth = 1)+
+  theme_classic()+
+  labs(title="Figure 6: Spread of Support Score", x="Total Support", y="Count")
+# support_hist
+```
+
+For the categorical variables, frequencies were plotted on bar charts to show if there was even sampling for those data sets (see **Fig. 7** and **Fig. 8** in **Appendix**).  Patients who smoked had more patients identified as non-smokers than those identified as smokers; patients without an anemia diagnosis had a greater frequency than those who did not.
+```{r Categorical Frequencies, echo=FALSE, message=FALSE}
+##NA's were not being removed with na.rm=TRUE, therefore they were removed before calling the ggplot functions
+anem_freq <- milestone2_subset %>% na.omit() %>% 
+  ggplot()+
+  geom_bar(mapping=aes(ANEMIA0))+
+  theme_classic()+
+  labs(title= "Figure 7: Frequency of Patients with Anemia", y= "Count", 
+       x="Patients has Anemia")
+# anem_freq
+
+smoke_freq <- milestone2_subset %>% na.omit() %>% 
+  ggplot()+
+  geom_bar(mapping=aes(SMOKERE0))+
+  theme_classic()+
+  labs(title= "Figure 8: Frequency of Patients who Smoke", y= "Count", 
+       x="Patients who Smoke")
+# smoke_freq
+```
+
+Numerical relationships were briefly examined to be used to potentially formulate questions about the significance of their relationships.  There looks to be a positive linear relationship for height vs weight, which should be explored further to make any conclusions about that relationship (see **Fig. 9** in **Appendix**).
+```{r Numerical HvW EDA, echo=FALSE}
+hvw_scatter <- ggplot(milestone2_subset)+
+  geom_point(mapping=aes(HEIGHT0, WEIGHT0), na.rm=TRUE, size=0.5)+
+  geom_smooth(mapping=aes(HEIGHT0, WEIGHT0), method=lm, formula=y~x, na.rm=TRUE)+
+  theme_classic()+
+  labs(title="Figure 9: Height vs Weight Scatterplot", x="Height", y="Weight")
+# hvw_scatter
+```
+
+For the two categorical variables (anemia and smoking status), their relationships were explored to understand if there was any relationship between them and other categorical variables.  Anemia status was compared to race to show if there were any susceptibility trends.  It appears each race has the same density shown in the density plot in **Fig. 10**.  Pulse in beats/30 seconds was also reviewed against smoking status (see **Fig. 11** in **Appendix**).  The density was displayed and shows there is a similar peak for those who smoke and those who do not.
+```{r Cat v Num EDA, echo=FALSE}
+avr_jitter <- milestone2_subset %>% na.omit() %>% ggplot()+
+  geom_jitter(mapping=aes(RACE, ANEMIA0), na.rm=TRUE, size=0.5)+
+  labs(title="Figure 10: Anemia by Race", x="Race", y="Patient had Anemia Diagnosis?")+
+  theme_classic()+
+  theme(axis.text.x=element_text(size=10, angle=75, hjust=1, vjust=1))
+# avr_jitter
+
+pulse_density <- milestone2_subset %>% na.omit() %>% ggplot()+
+  geom_density(mapping=aes(PULSE0, color=SMOKERE0), size=1)+
+  theme_classic()+
+  labs(title="Figure 11: Density of Pulse by Smoking Status", x= "Pulse (beats/30 sec)", y="Density")
+# pulse_density
+```
+
+
+\newpage
+
+# Hypothesis Testing
+Hypothesis testing was used to compare and contrast relationships between the data's population parameters and sample statistics.  The questions assessed through this analysis are stated in each section and the statistical conclusions can be viewed at the end of each section.  All data sets assume the samples are randomly selected and the data is normally distributed.
+
+### Do women with an anemia diagnosis have a different average pulse than those who do not have an anemia diagnosis?
+The claim for this question is that there is a statistical difference of pulse between those who were diagnosed with anemia and those who were not.  Because of the wording of this claim the null hypothesis would be that the mean pulse of those with anemia is equal to the mean pulse of those without anemia; the alternative is that they are not equal to each other.  The claim was tested at an alpha = 0.05 using a two-tailed hypothesis method.  A sample of 100 for each anemia status from the SWAN data set was analyzed.
+```{r Anemia Hypothesis Testing, echo=FALSE, message=FALSE}
+with <- filter(milestone2_subset, ANEMIA0=="Yes", !is.na(PULSE0))
+#summary(with)
+without <- filter(milestone2_subset, ANEMIA0=="No", !is.na(PULSE0))
+#summary(without)
+
+#State the null hypothesis, alternative hypothesis and claim
+Null <- "mu1 is equal to mu2"
+ALT <- "mu1 does not equal mu2"
+Claim <- "Women with anemia have a different average pulse than women without it"
+
+#creating a random sample
+set.seed(78)
+with_samp <- sample(nrow(with), 100)
+with_samp <- with[with_samp,]
+#headTail(with_samp)
+
+set.seed(34)
+without_samp <- sample(nrow(without), 100)
+without_samp <- without[without_samp,]
+#headTail(without_samp)
+
+#Calculate critical values
+alpha <- 0.05
+tails <- 2
+halpha <- alpha/tails
+cv <- qt(p=1-halpha, df=99, lower.tail = TRUE)
+tplot <- plotttest(cv, df=99, tails= "two")
+
+#calculate the test statistic
+ttest <- t.test(with_samp$PULSE0, without_samp$PULSE0, alternative = "two.sided", var.equal = FALSE)
+ttest
+t <- ttest$statistic
+t
+
+#Make decision
+decision <- if(abs(cv)>abs(t)){
+  "Do not reject Null Hypothesis"
+}else{
+  "Reject Null Hypothesis"
+}
+decision
+
+#Summarize results
+conclusion <- if(decision=="Do not reject Null Hypothesis"){
+  "There is not enough evidence to support the claim:"
+}else{
+  "There is enough evidence to support the claim:"
+}
+
+cat(conclusion, Claim, sep=" ")
+```
+
+The calculated t statistic was within the non-critical region of the t curve (see **Fig. 12** in **Appendix**).  This resulted in a fail to reject the null hypothesis.  *There is not enough evidence to support the claim that the pulse of women with an anemia diagnosis is different from the pulse women without an anemia diagnosis.*
+
+### Is the proportion of women who smoke at age 45 years the same as the proportion of all women who smoke?
+Women at age 45 were believed to have the same proportion of women who smoke as the entire SWAN data set.  To test this claim, all patients aged 45 were subsetted and calculated the proportion of women who smoked.  That was compared to all women who smoked in the SWAN data set comparing their proportions.  This was tested at an alpha of 0.05.  The null hypothesis that aligns with the claim is the two proportions are equal, and the alternative is they are not equal.
+```{r Smoke proportions, echo=FALSE, message=FALSE, warning=FALSE}
+smokers <- milestone2_subset %>% filter(SMOKERE0=="Yes") %>% nrow()
+Total <- filter(milestone2_subset, !is.na(SMOKERE0)) %>% nrow()
+pop_prop <- smokers/Total
+fortyfivers <- filter(milestone2_subset, AGE0==45)
+
+#State the null hypothesis, alternative hypothesis, and claim
+cat("Null: p =", as.character(round(pop_prop*100)), "%", sep = " ")
+cat("Alternative: p neq", as.character(round(pop_prop*100)), "%", sep = " ")
+Claim <- "The proportion of smokers at age 45 is equal to the proportion of smokers in the SWAN dataset"
+
+#Find proportion statistics
+p <- pop_prop
+q <- 1-p
+smoker_45 <- fortyfivers %>% filter(SMOKERE0=="Yes") %>% nrow()
+n <- filter(fortyfivers, !is.na(SMOKERE0)) %>% nrow()
+phat <- smoker_45/n
+
+#Calculating the critical value
+alpha <- 0.05
+tails <- 2
+halpha <- alpha/2
+cv <- qnorm(halpha, lower.tail = TRUE)
+zplot <- plotztest(cv, tails="two")
+
+#Calculate z
+z <- (phat-p)/sqrt(p*q/n)
+cat("z = ", z)
+
+#Make decision
+decision <- if(abs(cv)>abs(z)){
+  "Do not reject Null Hypothesis"
+}else{
+  "Reject Null Hypothesis"
+}
+decision
+
+#Summarize the results
+conclusion <- if(decision=="Reject Null Hypothesis"){
+  "There is not enough evidence to support the claim:"
+}else{
+  "There is enough evidence to support the claim:"
+}
+
+cat(conclusion, Claim, sep=" ")
+```
+
+The z statistic falls in the non-critical regions of the z plot (see **Fig. 13** in **Appendix**).Based on the z score at an alpha of 0.05, the null hypothesis was not rejected.  Because the claim aligns with the null hypothesis, *there was enough evidence to support the claim that the two proportions are statistically equivalent.*
+
+\newpage
+# Regression Analysis
+For the regression analysis, numerical data was plotted on a Scatterplot Matrix to understand if there were any linear relationships that could be visualized in the data set (see **Fig. 14** in **Appendix**).  Questions were formulated in an attempt to understand the relationships in continuous numerical data.
+
+### Is there a significant relationship between height and weight?
+The relationship between height and weight was explored to see if the hypothesis that there is a significant positive linear relationship in the SWAN data set is an accurate claim.  Data was visualized through a density scatterplot because the data was highly dense throughout the graph making it visually difficult to see any relationship (see **Fig. 15** in **Appendix**).  The correlation coefficient was calculated and tested for significance to ensure the relationship is significant.  This was tested at 0.95 confidence level.
+
+From the analysis, the relationship was a weak positive, however based on the calculated p value, was significant (p<0.05).  The null hypothesis was rejected and the claim was supported.
+```{r height weight relationship, echo=FALSE, warning=FALSE}
+# with(milestone2_subset, {
+#   bin <- hexbin(HEIGHT0, WEIGHT0, xbins = 50)
+#   plot(bin, main="Figure 15: Hexagonal Binning", xlab="Height", ylab="Weight")
+# })
+#cor(milestone2_subset$HEIGHT0, milestone2_subset$WEIGHT0, use = "complete.obs", method="pearson")
+
+cor.test(x=milestone2_subset$HEIGHT0,
+         y=milestone2_subset$WEIGHT0,
+         method = "pearson",
+         alternative="two.sided",
+         conf.level = 0.95)
+```
+
+### Can Diastolic Blood Pressure be used to predict Systolic Blood Pressure?
+There are two types of blood pressure measurements in the SWAN data set.  Deciding which measure to use for the final comparison was determined by this analysis.  If they were found to not be equivalent, both would be analyzed; however, if they are found to be equivalent either would be chosen.  The significance of the correlation was tested at a confidence of 0.95 that there is a significant positive relationship between diastolic and systolic blood pressure measurements.
+
+Based on the analysis outputs from the correlation significance test, the p value was less than the alpha 0.05 therefore the null hypothesis can be rejected.  There is enough evidence to support the claim that there is a significant relationship between the two blood pressure measurements.
+```{r BP Significance test, echo=FALSE}
+cor.test(x=milestone2_subset$DIABP10,
+         y=milestone2_subset$SYSBP10,
+         method = "pearson",
+         alternative = "two.sided",
+         conf.level = 0.95)
+```
+
+A linear model was calculated and used to predict values for the systolic blood pressure.  The model was evaluated using tools in R (see **Fig. 16** in **Appendix**).  The diagnostics show the regression model passes for the majority with slight skewness at the higher blood pressure measurements (see __Normal Q-Q__ in **Fig. 16**).  The residuals plots do fall in the normal locations (around the zero line), however some fall close to and outside the Cook's Distance (see __Residuals vs Fitted__ and __Residuals vs Leverage__ in **Fig. 16**) These calculated predictions were plotted on the scatter plot to show the relative locations of the predicted measurements in red (see **Fig. 17** in **Appendix**).
+```{r BP linear regressions, echo=FALSE, message=FALSE, warning=FALSE}
+bp_lm <- lm(data=milestone2_subset, SYSBP10~DIABP10)
+bp_lm
+# bp_regplot <- ggplot(milestone2_subset, mapping=aes(DIABP10, SYSBP10))+
+#   geom_point(na.rm = TRUE)+
+#   geom_smooth(method = lm, se=FALSE)+
+#   theme_classic()+
+#   labs(title="Blood Pressure Regression", x="Diastolic Blood Pressure", y="Systolic Blood Pressure")
+# bp_regplot
+diabp_future <- data.frame("DIABP10"=seq(60,100,10))
+diabp_future
+sys_pred <- predict(newdata=diabp_future, bp_lm)
+# sys_pred
+
+prediction_data <- data.frame(diabp_future, "SYSBP10"=sys_pred)
+# prediction_data
+bp_regFinal <- ggplot(na.rm = TRUE)+
+  geom_point(milestone2_subset, mapping = aes(DIABP10, SYSBP10))+
+  geom_smooth(milestone2_subset, mapping = aes(DIABP10, SYSBP10), method = lm, se=FALSE)+
+  geom_point(prediction_data, mapping = aes(DIABP10, SYSBP10), color="red", size=2)+
+  theme_classic()+
+  labs(title="Figure 17: Blood Pressure Regression", x="Diastolic Blood Pressure", y="Systolic Blood Pressure")
+# bp_regFinal
+```
+
+### Is there a significant linear relationship between Weight and Blood Pressure
+The relationship between weight and blood pressure was explored.  The hypothesis is there was a significant positive relationship between weight and blood pressure (see **Fig. 18** in **Appendix**).  This correlation was tested at a confidence of 0.95.  The calculated correlation coefficient was a very weak positive.  Despite the weak positive, the relationship was calculated to be a significant relationship.
+```{r weight vs bp, echo=FALSE, warning=FALSE}
+# with(milestone2_subset, {
+#   bin <- hexbin(WEIGHT0, DIABP10, xbins = 50)
+#   plot(bin, main="Hexagonal Binning", xlab="Weight", ylab="Diastolic Blood Pressure")
+# })
+
+cor(milestone2_subset$WEIGHT0, milestone2_subset$DIABP10, use="complete.obs", method = "pearson")
+ #very weak positive relationship
+
+cor.test(x=milestone2_subset$WEIGHT0,
+         y=milestone2_subset$DIABP10,
+         method="pearson",
+         alternative = "two.sided",
+         conf.level = 0.95)
+```
+
+A sub-question emerged from this analysis.  __How does racial subdivision effect the weight vs blood pressure relationship?__  Because the relationship between the weight and blood pressure of patience was trying to be explored to determine if subdivision effected the correlation as a whole, the subdivisions were subsetted and not set as dummy variables, and each correlation was tested at a confidence of 0.95.  Both subdivisions were significant and positive, however, minorities had a higher correlation and therefore a stronger relationship between weight and Diastolic Blood Pressure (see **Fig. 19** in **Appendix**).    
+```{r weight vs bp subdivisions, echo=FALSE, warning=FALSE}
+minority <- milestone2_subset %>% filter(Subdivision=="Minority")
+majority <- milestone2_subset %>% filter(Subdivision=="Majority")
+cor.test(x=minority$WEIGHT0,
+         y=minority$DIABP10,
+         method="pearson",
+         alternative = "two.sided",
+         conf.level = 0.95)
+cor.test(x=majority$WEIGHT0,
+         y=majority$DIABP10,
+         method="pearson",
+         alternative = "two.sided",
+         conf.level = 0.95)
+wvbp_scatter_sub <- ggplot(milestone2_subset, mapping=aes(WEIGHT0, DIABP10, color=Subdivision))+
+  geom_point(na.rm = TRUE)+
+  geom_smooth(method = lm, se=FALSE)+
+  theme_classic()+
+  labs(title="Figure 19: Weight vs Blood Pressure", x="Weight", y="Diastolic Blood Pressure")
+```
+
+
+
+# Conclusion
+The data subset from the SWAN data was analyzed to test relationships between specific variables.  The data distributions were normal for continuous variables and even for the categorical variables as explored in the **Exploratory Data Analysis**. 
+
+Hypothesis testing showed that there was no significant difference between the pulses of women who have been diagnosed with anemia and those who have not in the SWAN data set.  Additionally, the proportion of women who smoked at age 45 were not statistically significantly different than the proportion of women who smoke in the SWAN data set.  There was not enough evidence to support either of the claims that there were differences in the samples obtained from the data set.
+
+The linear relationships explored in this report were found to be statistically significant, however the relationship between the height and weight and weight and blood pressure were very weak linear relationships.  Weight vs Diastolic Blood pressure is slightly effected by racial subdivisions, where minorities have almost twice the correlation coefficient value than majorities.  
+
+This analysis can be used to look at diagnostics and health products targeting women in the years ranging from 43 to 52 years old.  This small subset can be a guide for analysis in the larger data set that has been compiled over the years.
+
+\newpage
+# Appendix
+## Data Visualizations
+```{r Tables, message=FALSE, warning=FALSE}
+## Table 1. Race Frequency Data
+race
+
+## Table 2a. Summary Statistics
+sumStats
+## Table 2b. Summary Statistics
+summary(milestone2_subset)
+```
+
+```{r Visualizations - EDA, echo=FALSE, message=FALSE, warning=FALSE}
+race_pareto
+age_hist
+pulse_hist
+height_hist
+weight_hist
+support_hist
+
+anem_freq
+smoke_freq
+
+hvw_scatter
+
+avr_jitter
+pulse_density
+```
+
+```{r Visualizations - Hypothesis testing, warning=FALSE}
+#Figure 12: t Plot
+tplot
+#Figure 13: z Plot
+zplot
+```
+
+```{r Visualizations - Regression Analysis, echo=FALSE, warning=FALSE}
+scatterplotMatrix(data=milestone2_subset, ~HEIGHT0 + WEIGHT0 + PULSE0 + DIABP10 + SYSBP10, main="Figure 14: Scatterplot Matrix")
+with(milestone2_subset, {
+  bin <- hexbin(HEIGHT0, WEIGHT0, xbins = 50)
+  plot(bin, main="Figure 15: Hexagonal Binning of Height vs Weight", xlab="Height", ylab="Weight")
+})
+par(mfrow=c(2,2))
+plot(bp_lm, main="Figure 16: Linear Model Diagnostics")
+bp_regFinal
+with(milestone2_subset, {
+  bin <- hexbin(WEIGHT0, DIABP10, xbins = 50)
+  plot(bin, main="Figure 17: Hexagonal Binning of Weight vs Blood Pressure", xlab="Weight", ylab="Diastolic Blood Pressure")
+})
+wvbp_scatter_sub 
+```
+

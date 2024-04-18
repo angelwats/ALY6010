@@ -1,0 +1,224 @@
+---
+title: "Milestone 2"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+```{r Libraries, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(ggQC)
+library(nhstplot)
+```
+
+
+# Introduction
+
+Milestone 1 was used to explore the different variables in the SWAN dataset that was subseted for the purpose of explaratory data analysis.  In this report, multiple hypotheses will be tested to understand the relationships between the different groups depicted in the data subset.  This dataset is used to assessed women at a crucial lifestage to properly provide health services and support for women in the 40's and 50's age group (Sutton-Tyrell et al. 1997).
+
+## Data Cleaning
+
+Additional variables were added to the Milestone 1 subset to capture support the women interviewed felt they received.
+```{r Additional Variables}
+rawData <- 
+  read_csv("SWANBaselineData_ProfessorKSubset (1).csv")
+milestone2_subset <- subset(rawData, select = c(
+  SWANID,
+  AGE0,
+  ANEMIA0,
+  LISTEN0,
+  TAKETOM0,
+  CONFIDE0,
+  HELPSIC0,
+  SMOKERE0,
+  PULSE0,
+  HEIGHT0,
+  WEIGHT0,
+  RACE)
+)
+
+```
+
+Data was cleaned and additional columns were formulated.  Minority data was used to separate races that aren't as frequent as others, by taking all races below 20% (one fifth of the data because there are 5 races) and assigning them as a subdivision minority.  Support Scores were calculated by updating each support column to a numeric scale and adding them together.  The support score scale goes from 0 support to a score of 20 which means they feel the maximum support they could feel.  The average support score was also calculated.
+```{r Data Cleaning, echo=FALSE}
+milestone2_subset <- mutate(milestone2_subset, ANEMIA0=ifelse(ANEMIA0=="(1) No",
+                                                              "No", ifelse(ANEMIA0=="(2) Yes", "Yes", NA)),
+                          SMOKERE0=ifelse(SMOKERE0=="(1) No", "No", ifelse(SMOKERE0=="(2) Yes", "Yes", NA)),
+                            RACE=ifelse(RACE=="(1) Black/African American", "Black/African American",
+                                        ifelse(RACE=="(2) Chinese/Chinese American", 
+                                               "Chinese/Chinese American",
+                                               ifelse(RACE=="(3) Japanese/Japanese American",
+                                                      "Japanese/Japanese American",
+                                                      ifelse(RACE=="(4) Caucasian/White Non-Hispanic", 
+                                                             "Caucasian/ White Non-Hispanic", 
+                                                             ifelse(RACE=="(5) Hispanic", "Hispanic", NA)
+                                                      )))))
+milestone2_subset <- mutate(milestone2_subset, LISTEN0=as.numeric(substr(LISTEN0, 2,2)), TAKETOM0=as.numeric(substr(TAKETOM0,2,2)),
+       CONFIDE0=as.numeric(substr(CONFIDE0,2,2)), HELPSIC0=as.numeric(substr(HELPSIC0,2,2)))
+milestone2_subset <- mutate(milestone2_subset, Subdivision=ifelse(RACE=="Black/African American"|RACE=="Caucasian/ White Non-Hispanic", "Majority", "Minority"),
+               SupportScore=LISTEN0+TAKETOM0+CONFIDE0+HELPSIC0, SupportAvg=SupportScore/4)
+
+
+#view(milestone2_subset)
+head(milestone2_subset)
+str(milestone2_subset)
+summary(milestone2_subset)
+```
+
+\newpage
+
+## Question 1: Do women with anemia have the same pulse as women who do not have anemia?
+
+Anemia is a blood disease which can be genetic or caused by diet and lack of specific nutrients.  To understand if anemia has an effect on the pulse of women in their 40's and 50's, two samples of 100 were analyzed from the SWAN population, one sample set with women who have been diagnosed with anemia and one sample set with women who were not diagnosed with anemia. They were compared to each other using the Welch Two Sample t Test.
+
+State the Null Hypothesis, Alternative Hypothesis, and Claim.
+$$H_0:\mu_1=\mu_2\\H_1:\mu_1\neq\mu_2$$
+```{r Anemia Hypotheses and Claim, echo=FALSE}
+Null <- "mu1 is equal to mu2"
+ALT <- "mu1 does not equal mu2"
+Claim <- "Women with anemia have a different average pulse than women without it"
+Null
+ALT
+Claim
+```
+
+Data was subsetted for the comparison.
+```{r Anemia Subsets, echo=FALSE}
+#subset the data
+with <- filter(milestone2_subset, ANEMIA0=="Yes", !is.na(PULSE0))
+summary(with)
+without <- filter(milestone2_subset, ANEMIA0=="No", !is.na(PULSE0))
+summary(without)
+
+#create samples
+set.seed(78)
+with_samp <- sample(nrow(with), 100)
+with_samp <- with[with_samp,]
+head(with_samp)
+
+set.seed(34)
+without_samp <- sample(nrow(without), 100)
+without_samp <- without[without_samp,]
+head(without_samp)
+
+```
+
+Critical values were calculated for a two tailed test with an alpha of 0.05.  The critical value was calculated to be -1.98 to 1.98. which can be seen in the plot below.
+```{r Anemia Critical Value, echo=FALSE}
+alpha <- 0.05
+tails <- 2
+halpha <- alpha/tails
+cv <- qt(p=1-halpha, df=99, lower.tail = TRUE)
+plotttest(cv, 99, tails="two")
+```
+
+The t statistic was then calculate to compare against the critical values.  If the t was located in the red regions of the t Test graph, it would result in a reject the Null Hypothesis, otherwise it would fail to reject.
+```{r anemia t stat , echo=FALSE}
+ttest <- t.test(with_samp$PULSE0, without_samp$PULSE0, alternative = "two.sided", var.equal = FALSE)
+t <- ttest$statistic
+t
+```
+
+Making the decision based on the critical value and t statistic, do not reject the null hypothesis because the t statistic is not in the critical region and is -1.98 < t < 1.98.
+```{r Anemia Decision, echo=FALSE}
+decision <- if(abs(cv)>abs(t)){
+  "Do not reject Null Hypothesis"
+}else{
+  "Reject Null Hypothesis"
+}
+decision
+```
+
+Summary of results.
+```{r Anemia Summary, echo=FALSE}
+conclusion <- if(decision=="Do not reject Null Hypothesis"){
+  "There is not enough evidence to support the claim:"
+}else{
+  "There is enough evidence to support the claim:"
+}
+
+cat(conclusion, Claim, sep=" ")
+```
+
+Because the data resulted in a fail to reject the Null Hypothesis, there is not enough evidence to support the claim that there is a difference in pulse between patients with previously diagnosed anemia and patients who were not diagnosed with anemia. 
+
+\newpage
+
+## Question 2: Is the proportion of women who smoke at age 45 the same as all women who smoke in the SWAN dataset?
+
+The mean age in years of the SWAN dataset is slightly over 45 years old, Smokers vs non-smokers is relatively even in terms of proportions (review Milestone 1 for that analysis).  To understand if 45 year olds are distributed the same as the remainder of the population, proportion of smokers from both groups were analyzed to understand the relationship.
+
+Data was subsetted for the purpose of this analysis to include a sample of 45 year olds from the SWAN dataset.
+```{r Smoker Data subsets}
+smokers <- milestone2_subset %>% filter(SMOKERE0=="Yes") %>% nrow()
+Total <- filter(milestone2_subset, !is.na(SMOKERE0)) %>% nrow()
+pop_prop <- smokers/Total
+fortyfivers <- filter(milestone2_subset, AGE0==45)
+```
+
+
+State the Null Hypothesis, Alternative Hypothesis, and Claim.
+```{r Smokers Hypotheses and Claim, echo=FALSE}
+cat("Null: p =", as.character(round(pop_prop*100)), "%", sep = " ")
+cat("Alternative: p neq", as.character(round(pop_prop*100)), "%", sep = " ")
+Claim <- "The proportion of smokers at age 45 is equal to the proportion of smokers in the SWAN dataset"
+Claim
+```
+
+Proportions were calculated for the one sample Z-test for a proportion.
+```{r Smoker Calculations}
+p <- pop_prop
+q <- 1-p
+smoker_45 <- fortyfivers %>% filter(SMOKERE0=="Yes") %>% nrow()
+n <- filter(fortyfivers, !is.na(SMOKERE0)) %>% nrow()
+phat <- smoker_45/n
+```
+
+Critical values were calculated for a two tailed test with an alpha of 0.05.  The critical value was calculated to be -1.96 to 1.96. which can be seen in the plot below. 
+```{r Smokers Critical Value, echo=FALSE}
+alpha <- 0.05
+tails <- 2
+halpha <- alpha/2
+cv <- qnorm(halpha, lower.tail = TRUE)
+plotztest(cv, tails="two")
+```
+
+The z statistic was then calculate to compare against the critical values.  If the z was located in the red regions of the z Test graph, it would result in a reject the Null Hypothesis, otherwise it would fail to reject.
+```{r Smokers Z Stat, echo=FALSE}
+z <- (phat-p)/sqrt(p*q/n)
+z
+```
+
+Making the decision based on the critical value and z statistic, do not reject the null hypothesis because the z statistic is not in the critical region and is -1.96 < z < 1.96.
+```{r}
+decision <- if(abs(cv)>abs(z)){
+  "Do not reject Null Hypothesis"
+}else{
+  "Reject Null Hypothesis"
+}
+decision
+```
+
+Summary of results:
+```{r Smokers Summary, echo=FALSE}
+conclusion <- conclusion <- if(decision=="Reject Null Hypothesis"){
+  "There is not enough evidence to support the claim:"
+}else{
+  "There is enough evidence to support the claim:"
+}
+
+cat(conclusion, Claim, sep=" ")
+```
+The claim aligned with the Null Hypothesis in this instance.  The summary for this analysis that there was enough evidence to support the claim that there is no statistical difference between the proportion of smokers at age 45 to those in the SWAN dataset.
+
+\newpage
+
+There was an additional question that tried to identify if there was a difference in support between minorities and between majority racial subdivisions.  After further analysis, the data was determined to be skewed and not normally distributed, therefore that analysis is not included in this report.
+
+

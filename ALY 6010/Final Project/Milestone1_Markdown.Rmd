@@ -1,0 +1,196 @@
+---
+title: "Milestone 1"
+author: "Angel Waters"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Loading and Cleanup
+
+The necessary packages were loaded for the analysis.
+```{r Libraries}
+library(ggplot2)
+library(tidyverse)
+library(ggQC)
+```
+
+Load the pre-cleaned up data and subset further.
+```{r Load data}
+##Loading the DK raw data subset for further cleaning and visualizing the data.
+rawData <- 
+  read_csv("SWANBaselineData_ProfessorKSubset (1).csv")
+str(rawData)
+
+##Further subsets the data to meet the requirements for the final
+milestone1_subset <- subset(rawData, select = c(
+  SWANID,
+  AGE0,
+  ANEMIA0,
+  SMOKERE0,
+  PULSE0,
+  HEIGHT0,
+  WEIGHT0,
+  RACE)
+  )
+#view the different columns and their structures
+view(milestone1_subset)
+str(milestone1_subset)
+
+```
+
+Clean up the categorical data for data analysis and presentation.
+```{r Data Cleanup}
+milestone1_subset <- mutate(milestone1_subset, ANEMIA0=ifelse(ANEMIA0=="(1) No",
+                                                              "No", ifelse(ANEMIA0=="(2) Yes", "Yes", NA)),
+       SMOKERE0=ifelse(SMOKERE0=="(1) No", "No", ifelse(SMOKERE0=="(2) Yes", "Yes", NA)),
+       RACE=ifelse(RACE=="(1) Black/African American", "Black/African American",
+                   ifelse(RACE=="(2) Chinese/Chinese American", 
+                          "Chinese/Chinese American",
+                          ifelse(RACE=="(3) Japanese/Japanese American",
+                                 "Japanese/Japanese American",
+                                 ifelse(RACE=="(4) Caucasian/White Non-Hispanic", 
+                                        "Caucasian/ White Non-Hispanic", 
+                                        ifelse(RACE=="(5) Hispanic", "Hispanic", NA)
+                                        )))))
+
+```
+
+
+# Descriptive Statistics
+
+Calculating various descriptive statistics of each of the variables.
+```{r Descriptive Stats Numerical}
+summary(milestone1_subset)
+age_sd <- sd(milestone1_subset$AGE0, na.rm = TRUE)
+age_mean <- mean(milestone1_subset$AGE0, na.rm = TRUE)
+pulse_sd <- sd(milestone1_subset$PULSE0, na.rm = TRUE)
+pulse_mean <- mean(milestone1_subset$PULSE0, na.rm = TRUE)
+height_sd <- sd(milestone1_subset$HEIGHT0, na.rm = TRUE)
+height_mean <- mean(milestone1_subset$HEIGHT0, na.rm=TRUE)
+weight_sd <- sd(milestone1_subset$WEIGHT0, na.rm = TRUE)
+weight_mean <- mean(milestone1_subset$WEIGHT0, na.rm=TRUE)
+age_med <- median(milestone1_subset$AGE0, na.rm=TRUE)
+pulse_med <- median(milestone1_subset$PULSE0, na.rm=TRUE)
+height_med <- median(milestone1_subset$HEIGHT0, na.rm=TRUE)
+weight_med <- median(milestone1_subset$WEIGHT0, na.rm=TRUE)
+```
+
+Create a csv file to use in the report for descriptive statistics.
+```{r}
+clmn_names <- c("Age", "Pulse", "Height", "Weight")
+sds <- c(age_sd, pulse_sd, height_sd, weight_sd)
+means <- c(age_mean, pulse_mean, height_mean, weight_mean)
+medians <- c(age_med, pulse_med, height_med, weight_med)
+desc_table <- data.frame("Continuous Data"=clmn_names, "Standard Deviation"=sds, "Mean"=means, "Medians"=medians)
+desc_table
+#write the table into a format that can be copied over into the report
+write.csv(desc_table, "C:/Users/12072/OneDrive/Desktop/ALY 6010/Final Project\\Milestone1_Descriptive.csv")
+```
+
+
+# Data Visualization
+
+Understand the spread of the numerical data.
+```{r Histograms}
+age_hist <- ggplot(milestone1_subset)+
+  geom_histogram(mapping=aes(AGE0), na.rm = TRUE, binwidth = 1, color="black")+
+  theme_classic()+
+  labs(title="Spread of Age", x="Age (years)", y="Count")
+age_hist
+##put a box plot in to highlight the outliers in this chart
+pulse_hist <- ggplot(milestone1_subset,mapping=aes(PULSE0), na.rm = TRUE)+
+  geom_histogram(color="black")+
+  geom_boxplot()+
+  theme_classic()+
+  labs(title="Spread of Pulse", x="Pulse (beats/30 sec)", y="Count")
+pulse_hist
+height_hist <- ggplot(milestone1_subset)+
+  geom_histogram(mapping=aes(HEIGHT0), na.rm = TRUE, color="black")+
+  theme_classic()+
+  labs(title="Spread of Height", x="Height (cm)", y="Count")
+height_hist
+weight_hist <- ggplot(milestone1_subset)+
+  geom_histogram(mapping=aes(WEIGHT0), na.rm = TRUE, color="black")+
+  theme_classic()+
+  labs(title="Spread of Weight", x="Weight (kg)", y="Count")
+weight_hist
+```
+
+To understand the spread of the categorical data. 
+```{r Categorical spread}
+##NA's were not being removed with na.rm=TRUE, therefore they were removed before calling the ggplot functions
+anem_freq <- milestone1_subset %>% drop_na() %>% 
+  ggplot()+
+  geom_bar(mapping=aes(ANEMIA0))+
+  theme_classic()+
+  labs(title= "Frequency of Patients with Anemia", y= "Count", 
+       x="Patients has Anemia")
+anem_freq  
+
+smoke_freq <- milestone1_subset %>% drop_na() %>% 
+  ggplot()+
+  geom_bar(mapping=aes(SMOKERE0))+
+  theme_classic()+
+  labs(title= "Frequency of Patients who Smoke", y= "Count", 
+       x="Patients who Smoke")
+smoke_freq
+##Analysis of RACE
+ggplot(milestone1_subset)+
+  geom_bar(mapping=aes(RACE))+
+  labs(title="Patient Race")+
+  theme(axis.text.x=element_text(size=13, angle=45, hjust=1, vjust=1))
+```
+
+A separate spread analysis for race was necessary because it has multiple possible results.
+```{r Race}
+ggplot(milestone1_subset)+
+  geom_bar(mapping=aes(RACE))+
+  labs(title="Patient Race")+
+  theme(axis.text.x=element_text(size=13, angle=45, hjust=1, vjust=1))
+##creating frequency and pareto charts to plot the race data
+##Creates a tibble with the total counts for each race identified
+race <- milestone1_subset %>% group_by(RACE) %>% summarise(Total=n())
+##Calculates the frequency of each race
+race <- mutate(race, Frequency=Total/sum(Total))
+race
+race_pareto <- ggplot(race, mapping=aes(x=RACE, y=Total))+
+  stat_pareto(bars.fill="gray")+
+  labs(title="Patient Race Pareto", x="Race")+
+  theme_classic()+
+  theme(axis.text.x=element_text(size=13, angle=45, hjust=1, vjust=1))
+race_pareto
+```
+
+Height and weight relationship using a scatterplot.
+```{r Height vs Weight}
+hvw_scatter <- ggplot(milestone1_subset)+
+  geom_point(mapping=aes(HEIGHT0, WEIGHT0), na.rm=TRUE, size=0.5)+
+  geom_smooth(mapping=aes(HEIGHT0, WEIGHT0), method=lm, formula=y~x, na.rm=TRUE)+
+  theme_classic()
+hvw_scatter
+```
+
+Is there a relationship between race and anemia?
+```{r Race vs Anemia}
+avr_jitter <- milestone1_subset %>% drop_na() %>% ggplot()+
+  geom_jitter(mapping=aes(RACE, ANEMIA0), na.rm=TRUE, size=0.5)+
+  labs(title="Anemia by Race", x="Race", y="Patient had Anemia Diagnosis?")+
+  theme_classic()+
+  theme(axis.text.x=element_text(size=10, angle=75, hjust=1, vjust=1))
+avr_jitter
+```
+
+Is there a relationship between smoking and measured pulse?
+```{r smoking vs pulse}
+pulse_density <- milestone1_subset %>% drop_na() %>% ggplot()+
+  geom_density(mapping=aes(PULSE0, color=SMOKERE0), size=1)+
+  theme_classic()+
+  labs(title="Density of Pulse by Smoking Status", x= "Pulse (beats/30 sec)", y="Density")
+pulse_density
+```
+
+
